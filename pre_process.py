@@ -9,6 +9,7 @@ import numpy as np
 import math
 import timeit
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
 
 def extract_zips():
   
@@ -46,9 +47,9 @@ def pre_process(f = 0.01):
   X_test = np.empty((0, 512, 512, 3), float)
   Y_test = np.empty((0, 1), float)
 
-  for i in [1, 4, 8]:
+  for i in range(1, 9):
     x_train,y_train,x_val,y_val,x_test,y_test = util.data_load(dl_info, dl_info_vector, json_labels, i, f=f)
-    
+
     y_train = np.array([i for _ in range(len(y_train))]).reshape(-1,1)
     y_val = np.array([i for _ in range(len(y_val))]).reshape(-1, 1)
     y_test = np.array([i for _ in range(len(y_test))]).reshape(-1, 1)
@@ -86,13 +87,24 @@ def pre_process(f = 0.01):
   # print(shuffled_val_indices)
   # print(shuffled_test_indices)
   
+  # Using only 1 slice to conserve RAM footprint
+
+  # X_train = X_train[:, :, :, 1]
+  # X_val = X_val[:, :, :, 1]
+  # X_test = X_test[:, :, :, 1]
+
+  #
+  x = np.array(X_train[0, :, :, 1])
+  
+  print('size of sample image', sys.getsizeof(x))
+  
   return X_train, Y_train, X_val, Y_val, X_test, Y_test
   
 def train():
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .6)
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .05)
 
   input_shape = (512, 512, 3)
-  num_classes = 10
+  num_classes = 9
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
@@ -102,7 +114,7 @@ def train():
 
   model.layers.pop()
   model.outputs = [model.layers[-1].output]
-  output = model.get_layer('Conv_1_bn').output
+  output = model.get_layer('Conv_1_bn').output #Conv_1_bn for Mobilenetv2, block5_pool for vgg19
   output = tf.keras.layers.Flatten()(output)
   output = tf.keras.layers.Dense(num_classes, activation='softmax',
                             kernel_initializer=initializer)(output)
@@ -116,17 +128,18 @@ def train():
                 loss='sparse_categorical_crossentropy',
                 metrics=[tf.keras.metrics.sparse_categorical_accuracy])
   
-  new_model.fit(X_train, Y_train, batch_size=8, epochs=5, validation_data=(X_val, Y_val))
+  new_model.fit(X_train, Y_train, batch_size=16, epochs=50, validation_data=(X_val, Y_val))
   
   new_model.evaluate(X_test, Y_test)
 
   preds = new_model.predict(X_test)
 
   preds = np.argmax(preds, axis = 1)
-  gt = Y_test
-
-  # print(preds, Y_test)
-
+  
+  confusion = confusion_matrix(Y_test, preds)
+  print('Confusion Matrix\n')
+  print(confusion)
 
 if __name__ == '__main__':
-  train()
+  # train()
+  pre_process(f = .05)

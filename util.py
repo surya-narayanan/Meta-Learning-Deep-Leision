@@ -154,9 +154,19 @@ def read_image_and_neighbors(dl_info, fn,verbose=True) :
     # are going to produce a matrix (512,512,3) 
     slices = np.zeros( (512,512,3 ) ) 
 
-    slices[:,:,0] = lim
-    slices[:,:,1] = mim 
-    slices[:,:,2] = rim 
+    try:
+        slices[:,:,0] = lim
+    except:
+        pass
+    
+    try:
+        slices[:,:,1] = mim 
+    except:
+        pass
+    try:
+        slices[:,:,2] = rim 
+    except:
+        pass
     
     return (slices, np.array(bb)) 
 
