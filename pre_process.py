@@ -1,7 +1,6 @@
 
 import zipfile
 import sys
-sys.path.insert(1, '/home/Surya/cs230/')
 import util
 import tqdm
 import os
@@ -27,7 +26,7 @@ def extract_zips():
     print('done extracting', path_to_zip_file)
 
 
-def pre_process():
+def pre_process(f = 0.01):
   dl_info = util.read_dl_info() 
 
   json_labels = util.read_json_labels('/home/Surya/cs230/text_mined_labels_171_and_split.json')   
@@ -36,23 +35,23 @@ def pre_process():
     image_dir = '../images/Images_png/',
     DL_INFO_PATH  = '/home/Surya/cs230/') 
 
-  num_classes_to_construct = 2
+  
 
   data = {}
 
   X_train = np.empty((0, 512, 512, 3), float)
-  Y_train = np.empty((0, ), float)
+  Y_train = np.empty((0, 1), float)
   X_val = np.empty((0, 512, 512, 3), float)
-  Y_val = np.empty((0, ), float)
+  Y_val = np.empty((0, 1), float)
   X_test = np.empty((0, 512, 512, 3), float)
-  Y_test = np.empty((0, ), float)
+  Y_test = np.empty((0, 1), float)
 
-  for i in range(1, num_classes_to_construct):
-    x_train,y_train,x_val,y_val,x_test,y_test = util.data_load(dl_info, dl_info_vector, json_labels, i, f=0.01)
+  for i in [1, 4, 8]:
+    x_train,y_train,x_val,y_val,x_test,y_test = util.data_load(dl_info, dl_info_vector, json_labels, i, f=f)
     
-    y_train = np.array([i for _ in range(len(y_train))])
-    y_val = np.array([i for _ in range(len(y_train))])
-    y_test = np.array([i for _ in range(len(y_test))])
+    y_train = np.array([i for _ in range(len(y_train))]).reshape(-1,1)
+    y_val = np.array([i for _ in range(len(y_val))]).reshape(-1, 1)
+    y_test = np.array([i for _ in range(len(y_test))]).reshape(-1, 1)
 
     X_train =  np.append(X_train, x_train, axis=0)
     Y_train = np.append(Y_train, y_train, axis=0)
@@ -61,28 +60,45 @@ def pre_process():
     X_test = np.append(X_test, x_test, axis=0)
     Y_test = np.append(Y_test, y_test, axis=0)
 
-  shuffled_train_indices = np.random.shuffle(list(range(len(X_train))))
+  shuffled_train_indices = list(range(len(X_train)))
+  np.random.shuffle(shuffled_train_indices)
+  
+  X_train = np.squeeze(X_train[shuffled_train_indices] ) 
+  Y_train = np.squeeze(Y_train[shuffled_train_indices] ) 
 
-  # X_train = X_train[shuffled_train_indices] 
-  # print(X_train.shape)
+  shuffled_val_indices = list(range(len(X_val)))
+  np.random.shuffle(shuffled_val_indices)
+  
+  X_val = np.squeeze(X_val[shuffled_val_indices] ) 
+  Y_val = np.squeeze(Y_val[shuffled_val_indices] ) 
 
-  # Y_train = Y_train[shuffled_train_indices] 
+  # print(Y_val)
 
+  shuffled_test_indices = list(range(len(X_test)))
+  np.random.shuffle(shuffled_test_indices)
+  
+  X_test = np.squeeze(X_test[shuffled_test_indices] ) 
+  Y_test = np.squeeze(Y_test[shuffled_test_indices] ) 
+
+  # print(Y_test)
+
+  # print(shuffled_train_indices)
+  # print(shuffled_val_indices)
+  # print(shuffled_test_indices)
+  
   return X_train, Y_train, X_val, Y_val, X_test, Y_test
   
 def train():
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process()
-
-  print(X_train.shape)
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .6)
 
   input_shape = (512, 512, 3)
-  num_classes = 2
+  num_classes = 10
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
   model = tf.keras.applications.MobileNetV2(include_top=False, weights='imagenet', input_shape=input_shape)
 
-  print(model.summary())
+  # print(model.summary())
 
   model.layers.pop()
   model.outputs = [model.layers[-1].output]
@@ -95,11 +111,22 @@ def train():
   # print(new_model.summary())
 
   optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+  
   new_model.compile(optimizer=optimizer,
                 loss='sparse_categorical_crossentropy',
                 metrics=[tf.keras.metrics.sparse_categorical_accuracy])
-  new_model.fit(X_train, Y_train, batch_size=512, epochs=5, validation_data=(X_val, Y_val))
+  
+  new_model.fit(X_train, Y_train, batch_size=8, epochs=5, validation_data=(X_val, Y_val))
+  
   new_model.evaluate(X_test, Y_test)
+
+  preds = new_model.predict(X_test)
+
+  preds = np.argmax(preds, axis = 1)
+  gt = Y_test
+
+  # print(preds, Y_test)
+
 
 if __name__ == '__main__':
   train()
