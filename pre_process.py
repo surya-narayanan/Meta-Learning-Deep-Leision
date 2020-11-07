@@ -64,15 +64,19 @@ def pre_process(f = 0.01):
     x_val = x_val[:20, :, :, :]
     x_test = x_test[:20, :, :, :]
 
+    y_train = y_train[:200, :]
+    y_val = y_val[:20, :]
+    y_test = y_test[:20, :]
+
     #Downsample
     if downsample :
       x_train = block_reduce(x_train, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
       x_val = block_reduce(x_val, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
       x_test = block_reduce(x_test, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
 
-    y_train = np.array([i for _ in range(len(y_train))]).reshape(-1,1)
-    y_val = np.array([i for _ in range(len(y_val))]).reshape(-1, 1)
-    y_test = np.array([i for _ in range(len(y_test))]).reshape(-1, 1)
+    y_train = i * np.ones((len(y_train), 1))
+    y_val = i * np.ones((len(y_val), 1))
+    y_test = i * np.ones((len(y_test), 1))
 
     X_train =  np.append(X_train, x_train, axis=0)
     Y_train = np.append(Y_train, y_train, axis=0)
@@ -80,6 +84,8 @@ def pre_process(f = 0.01):
     Y_val = np.append(Y_val, y_val, axis=0)
     X_test = np.append(X_test, x_test, axis=0)
     Y_test = np.append(Y_test, y_test, axis=0)
+
+    print(Y_test.shape)
 
   shuffled_train_indices = list(range(len(X_train)))
   np.random.shuffle(shuffled_train_indices)
@@ -96,12 +102,21 @@ def pre_process(f = 0.01):
   # print(Y_val)
 
   shuffled_test_indices = list(range(len(X_test)))
+
+  print('before shuffling', shuffled_test_indices)
+
   np.random.shuffle(shuffled_test_indices)
+
+  print('after shuffling', shuffled_test_indices)
   
+  print('Y_test shape', Y_test[shuffled_test_indices].shape)
+
+  print(Y_test[shuffled_test_indices])
+
   X_test = np.squeeze(X_test[shuffled_test_indices] ) 
   Y_test = np.squeeze(Y_test[shuffled_test_indices] ) 
 
-  # print(Y_test)
+  print('after the squeeze', Y_test)
 
   # print(shuffled_train_indices)
   # print(shuffled_val_indices)
@@ -120,11 +135,17 @@ def pre_process(f = 0.01):
   
   return X_train, Y_train, X_val, Y_val, X_test, Y_test
   
-def train():
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .15)
+def train_vgg():
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .35)
+
+  print(Y_train)
+
+  print(Y_val)
+
+  print(Y_test)
 
   input_shape = (256, 256, 3)
-  num_classes = 9
+  num_classes = 8
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
@@ -148,7 +169,7 @@ def train():
                 loss='sparse_categorical_crossentropy',
                 metrics=[tf.keras.metrics.sparse_categorical_accuracy])
   
-  new_model.fit(X_train, Y_train, batch_size=8, epochs=5, validation_data=(X_val, Y_val))
+  new_model.fit(X_train, Y_train, batch_size=64, epochs=5, validation_data=(X_val, Y_val))
   
   new_model.evaluate(X_test, Y_test)
 
@@ -162,6 +183,98 @@ def train():
 
   print(Y_test, preds)
 
+def sample_from(x, y, k, classes):
+  #returns n samples of x, y of class = class_num
+  # X : N, D, D, 3, 
+  # Y : N
+  n_classes = len(classes)
+  kn = k * n_classes
+
+  X = np.empty((1, kn, 256, 256, 3), float)
+  Y = np.empty((1, kn, n_classes), float)
+
+  labels = np.eye(n_classes)
+  counter = 0
+
+  for class_num in classes:
+    x = x[y == class_num]
+    
+    indices = list(range(len(x)))
+    np.random.shuffle(indices)
+
+    selected_samples = indices[:k]
+    y[selected_samples]
+
+    X = np.append(X, x[selected_samples], axis = 1)
+    Y = np.append(Y, np.repmat(labels[counter, :], k, axis = 0), axis = 1)
+
+    counter += 1
+
+  return X, Y
+  
+def train_vgg_snail():
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .13)
+
+  input_shape = (256, 256, 3)
+  num_classes = 9
+
+  initializer = tf.initializers.VarianceScaling(scale=2.0)
+
+  model = tf.keras.applications.MobileNetV2(include_top=False, weights='imagenet', input_shape=input_shape)
+
+  # print(model.summary())
+
+  model.layers.pop()
+  model.outputs = [model.layers[-1].output]
+  output = model.get_layer('Conv_1_bn').output #Conv_1_bn for Mobilenetv2, block5_pool for vgg19
+  output = tf.keras.layers.Flatten()(output)
+  new_model = tf.keras.Model(model.input, output)
+
+  # print(new_model.summary())
+
+  optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+  
+  new_model.compile(optimizer=optimizer,
+                loss='sparse_categorical_crossentropy',
+                metrics=[tf.keras.metrics.sparse_categorical_accuracy])
+  
+  #meta train
+  n_mt_classes = 5
+  n_classes = 8
+  k_shot = 3
+  n_mt_samples = 3
+  
+  classes = list(range(n_classes))
+  np.random.shuffle(classes)
+  shuffled_classes = classes[:n_mt_classes] #indexing to select n classes for meta training
+
+  x_mt, y_mt = sample_from(X_train, Y_train, (k_shot + 1) * n_mt_samples, classes)
+
+  print(x_mt.shape)
+
+  x_mt.reshape((n_mt_samples, (k_shot + 1) * n_mt_classes, 256, 256, 3))
+  y_mt.reshape((n_mt_samples, (k_shot + 1) * n_mt_classes, n_mt_classes))
+
+  print(x_mt.shape, 'after reshape')
+  print('expected')
+  print((n_mt_samples, (k_shot + 1) * n_mt_classes, 256, 256, 3))
+
+  print(y_mt[0, 0, :])
+  print(y_mt[0, (k_shot), :])
+  print(y_mt[0, (k_shot + 1), :])
+
+  # preds = new_model.predict(X_test)
+
+  # preds = np.argmax(preds, axis = 1)
+   
+  # confusion = confusion_matrix(Y_test, preds)
+  # print('Confusion Matrix\n')
+  # print(confusion)
+
+  # print(Y_test, preds)
+
 if __name__ == '__main__':
-  train()
+  # train_vgg()
   # pre_process(f = .05)
+  train_vgg_snail()
+  
