@@ -10,6 +10,7 @@ import math
 import timeit
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
+from skimage.measure import block_reduce
 
 def extract_zips():
   
@@ -47,8 +48,27 @@ def pre_process(f = 0.01):
   X_test = np.empty((0, 512, 512, 3), float)
   Y_test = np.empty((0, 1), float)
 
+  downsample = True
+  downsample_factor = 2
+  
+  if downsample:
+    X_train = block_reduce(X_train, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
+    X_val = block_reduce(X_val, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
+    X_test = block_reduce(X_test, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
+
   for i in range(1, 9):
     x_train,y_train,x_val,y_val,x_test,y_test = util.data_load(dl_info, dl_info_vector, json_labels, i, f=f)
+    
+    #Balance the classes
+    x_train = x_train[:200, :, :, :]
+    x_val = x_val[:20, :, :, :]
+    x_test = x_test[:20, :, :, :]
+
+    #Downsample
+    if downsample :
+      x_train = block_reduce(x_train, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
+      x_val = block_reduce(x_val, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
+      x_test = block_reduce(x_test, block_size=(1, downsample_factor, downsample_factor, 1), func=np.mean)
 
     y_train = np.array([i for _ in range(len(y_train))]).reshape(-1,1)
     y_val = np.array([i for _ in range(len(y_val))]).reshape(-1, 1)
@@ -94,16 +114,16 @@ def pre_process(f = 0.01):
   # X_test = X_test[:, :, :, 1]
 
   #
-  x = np.array(X_train[0, :, :, 1])
+  # x = np.array(X_train[0, :, :, 1])
   
-  print('size of sample image', sys.getsizeof(x))
+  # print('size of sample image', sys.getsizeof(x))
   
   return X_train, Y_train, X_val, Y_val, X_test, Y_test
   
 def train():
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .05)
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .15)
 
-  input_shape = (512, 512, 3)
+  input_shape = (256, 256, 3)
   num_classes = 9
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
@@ -128,7 +148,7 @@ def train():
                 loss='sparse_categorical_crossentropy',
                 metrics=[tf.keras.metrics.sparse_categorical_accuracy])
   
-  new_model.fit(X_train, Y_train, batch_size=16, epochs=50, validation_data=(X_val, Y_val))
+  new_model.fit(X_train, Y_train, batch_size=8, epochs=5, validation_data=(X_val, Y_val))
   
   new_model.evaluate(X_test, Y_test)
 
@@ -140,6 +160,8 @@ def train():
   print('Confusion Matrix\n')
   print(confusion)
 
+  print(Y_test, preds)
+
 if __name__ == '__main__':
-  # train()
-  pre_process(f = .05)
+  train()
+  # pre_process(f = .05)
