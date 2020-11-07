@@ -136,6 +136,9 @@ def pre_process(f = 0.01):
   return X_train, Y_train, X_val, Y_val, X_test, Y_test
   
 def train_vgg():
+
+  print('train_vgg')
+
   X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .35)
 
   print(Y_train)
@@ -145,7 +148,7 @@ def train_vgg():
   print(Y_test)
 
   input_shape = (256, 256, 3)
-  num_classes = 8
+  num_classes = 10
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
@@ -184,19 +187,24 @@ def train_vgg():
   print(Y_test, preds)
 
 def sample_from(x, y, k, classes):
+
+
   #returns n samples of x, y of class = class_num
   # X : N, D, D, 3, 
   # Y : N
   n_classes = len(classes)
   kn = k * n_classes
 
-  X = np.empty((1, kn, 256, 256, 3), float)
-  Y = np.empty((1, kn, n_classes), float)
+  X = np.empty((kn, 256, 256, 3), float)
+  Y = np.empty((kn, n_classes), float)
 
   labels = np.eye(n_classes)
   counter = 0
 
   for class_num in classes:
+
+    print(X.shape)
+
     x = x[y == class_num]
     
     indices = list(range(len(x)))
@@ -205,15 +213,18 @@ def sample_from(x, y, k, classes):
     selected_samples = indices[:k]
     y[selected_samples]
 
-    X = np.append(X, x[selected_samples], axis = 1)
-    Y = np.append(Y, np.repmat(labels[counter, :], k, axis = 0), axis = 1)
+    X = np.append(X, x[selected_samples], axis = 0)
+    Y = np.append(Y, np.tile(labels[counter], (k , 1)), axis = 0)
 
     counter += 1
 
   return X, Y
   
 def train_vgg_snail():
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = .13)
+
+  print('train_vgg_snail')
+
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(f = 0.01)
 
   input_shape = (256, 256, 3)
   num_classes = 9
@@ -240,11 +251,11 @@ def train_vgg_snail():
   
   #meta train
   n_mt_classes = 5
-  n_classes = 8
+  n_classes = 9
   k_shot = 3
   n_mt_samples = 3
   
-  classes = list(range(n_classes))
+  classes = list(range(1, n_classes))
   np.random.shuffle(classes)
   shuffled_classes = classes[:n_mt_classes] #indexing to select n classes for meta training
 
@@ -274,7 +285,7 @@ def train_vgg_snail():
   # print(Y_test, preds)
 
 if __name__ == '__main__':
-  # train_vgg()
+  train_vgg()
   # pre_process(f = .05)
-  train_vgg_snail()
+  # train_vgg_snail()
   
