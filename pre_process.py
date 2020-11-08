@@ -177,11 +177,17 @@ def train_vgg():
   new_model.evaluate(X_test, Y_test)
 
   preds = new_model.predict(X_test)
+  
+  print('before the arg max', preds)
 
   preds = np.argmax(preds, axis = 1)
   
+  print('after the arg max', preds)
+
   confusion = confusion_matrix(Y_test, preds)
+
   print('Confusion Matrix\n')
+
   print(confusion)
 
   print(Y_test, preds)
@@ -195,8 +201,8 @@ def sample_from(x, y, k, classes):
   n_classes = len(classes)
   kn = k * n_classes
 
-  X = np.empty((kn, 256, 256, 3), float)
-  Y = np.empty((kn, n_classes), float)
+  X = np.empty((0, 256, 256, 3), float)
+  Y = np.empty((0, n_classes), float)
 
   labels = np.eye(n_classes)
   counter = 0
@@ -205,17 +211,18 @@ def sample_from(x, y, k, classes):
 
     print(X.shape)
 
-    x = x[y == class_num]
+    x_class = x[y == class_num]
     
-    indices = list(range(len(x)))
+    indices = list(range(len(x_class)))
     np.random.shuffle(indices)
 
     selected_samples = indices[:k]
     y[selected_samples]
 
-    X = np.append(X, x[selected_samples], axis = 0)
+    X = np.append(X, x_class[selected_samples], axis = 0)
     Y = np.append(Y, np.tile(labels[counter], (k , 1)), axis = 0)
 
+    print('labels[counter]', labels[counter])
     counter += 1
 
   return X, Y
@@ -232,6 +239,7 @@ def train_vgg_snail():
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
   model = tf.keras.applications.MobileNetV2(include_top=False, weights='imagenet', input_shape=input_shape)
+  print(model.summary())
 
   # print(model.summary())
 
@@ -243,36 +251,83 @@ def train_vgg_snail():
 
   # print(new_model.summary())
 
-  optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+  new_optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
   
-  new_model.compile(optimizer=optimizer,
+  new_model.compile(optimizer=new_optimizer,
                 loss='sparse_categorical_crossentropy',
                 metrics=[tf.keras.metrics.sparse_categorical_accuracy])
   
   #meta train
   n_mt_classes = 5
   n_classes = 9
-  k_shot = 3
+  k_shot = 2
   n_mt_samples = 3
   
   classes = list(range(1, n_classes))
   np.random.shuffle(classes)
   shuffled_classes = classes[:n_mt_classes] #indexing to select n classes for meta training
 
-  x_mt, y_mt = sample_from(X_train, Y_train, (k_shot + 1) * n_mt_samples, classes)
+  x_mt, y_mt = sample_from(X_train, Y_train, (k_shot + 1) * n_mt_samples, shuffled_classes)
 
   print(x_mt.shape)
 
-  x_mt.reshape((n_mt_samples, (k_shot + 1) * n_mt_classes, 256, 256, 3))
-  y_mt.reshape((n_mt_samples, (k_shot + 1) * n_mt_classes, n_mt_classes))
+  x_mt = x_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, 256, 256, 3))
+  y_mt = y_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, n_mt_classes))
+
+  y_mt = np.transpose(y_mt, (1, 0, 2))
+  x_mt = np.transpose(x_mt, (1, 0, 2, 3, 4))
 
   print(x_mt.shape, 'after reshape')
   print('expected')
   print((n_mt_samples, (k_shot + 1) * n_mt_classes, 256, 256, 3))
 
-  print(y_mt[0, 0, :])
-  print(y_mt[0, (k_shot), :])
-  print(y_mt[0, (k_shot + 1), :])
+  embeddings = model.predict(x_mt.reshape((-1, 256, 256, 3)))  
+
+  embeddings = embeddings.reshape((n_mt_samples, n_mt_classes, (k_shot + 1), -1))
+  
+  y_mt = y_mt.reshape((n_mt_samples, n_mt_classes, (k_shot + 1), -1))
+
+  x_mt_support = np.concatenate([embeddings[:,:,:k_shot,:], y_mt[:,:,:k_shot,:]], axis = 3) # Append labels to support set embeddings
+  x_mt_support = x_mt_support.reshape(((n_mt_samples, k_shot * n_mt_classes, -1))) #(n_mt_samples, k_shot * n_mt_classes, embedding + n_mt_classes)
+  x_mt_support = np.repeat(x_mt_support, n_mt_classes, axis = 0)
+
+  x_mt_query = np.concatenate([embeddings[:,:,-1,:], np.zeros((n_mt_samples, n_mt_classes, n_mt_classes))], axis = 2) #(n_mt_samples, n_mt_classes, embedding + n_mt_classes)
+  x_mt_query = x_mt_query.reshape(n_mt_samples * n_mt_classes, 1, -1) #(n_mt_samples * n_mt_classes, 1, embedding + n_mt_classes)
+
+  x_mt = np.concatenate((x_mt_support, x_mt_query), axis = 1)
+
+  #Get the labels for the query set
+  y_mt = y_mt[:,:,-1,:].reshape((n_mt_samples, 1 * n_mt_classes, -1))
+  y_mt = y_mt.reshape((n_mt_samples * n_mt_classes, -1))
+
+  print("Expecting [10000], [01000]")
+  print(y_mt[0])
+  print(y_mt[1])
+  print(x_mt.shape)
+  print(y_mt.shape)
+  B, K, D = x_mt.shape
+  
+  layers = [
+    tf.keras.layers.LSTM(128, input_shape = (K,D), return_sequences=True),
+    tf.keras.layers.LSTM(n_mt_classes)
+  ]
+
+  meta_model = tf.keras.Sequential(layers)
+
+  meta_optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+
+  meta_model.compile(optimizer=meta_optimizer,
+                loss='categorical_crossentropy')
+
+  print(meta_model.summary())
+  print(tf.version.GIT_VERSION, tf.version.VERSION)
+
+  meta_model.fit(x_mt, y_mt, epochs=5)
+
+  # print(y_mt[0, 0, :])
+  # print(y_mt[0, k_shot, :])
+  # print(y_mt[0, k_shot + 1, :])
+  # print(y_mt[0])
 
   # preds = new_model.predict(X_test)
 
@@ -285,7 +340,7 @@ def train_vgg_snail():
   # print(Y_test, preds)
 
 if __name__ == '__main__':
-  train_vgg()
+  # train_vgg()
   # pre_process(f = .05)
-  # train_vgg_snail()
+  train_vgg_snail()
   
