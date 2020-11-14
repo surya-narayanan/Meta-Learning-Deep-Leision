@@ -7,8 +7,9 @@ import json
 from collections import Counter 
 from matplotlib.patches import Rectangle
 import math
-import tensorflow as tf 
-keras = tf.keras 
+from skimage.measure import block_reduce
+# import tensorflow as tf 
+# keras = tf.keras 
 
 # DOCUMENTATION 
 
@@ -157,16 +158,30 @@ def read_image_and_neighbors(dl_info, fn,verbose=True) :
     try:
         slices[:,:,0] = lim
     except:
-        pass
-    
+        downsample_factor = len(lim) / 512
+        if downsample_factor % 1 == 0:
+            downsample_factor = int(downsample_factor)
+            lim = block_reduce(lim, block_size=(downsample_factor, downsample_factor), func=np.mean)
+            slices[:,:,0] = lim
+        else:
+            pass
+        
     try:
         slices[:,:,1] = mim 
-    except:
-        pass
+    except:        
+        downsample_factor = len(mim) / 512
+        if downsample_factor % 1 == 0:
+            downsample_factor = int(downsample_factor)
+            mim = block_reduce(mim, block_size=(downsample_factor, downsample_factor), func=np.mean)
+            slices[:,:,1] = mim 
     try:
         slices[:,:,2] = rim 
     except:
-        pass
+        downsample_factor = len(rim) / 512
+        if downsample_factor % 1 == 0:       
+            downsample_factor = int(downsample_factor)    
+            rim = block_reduce(rim, block_size=(downsample_factor, downsample_factor), func=np.mean)
+            slices[:,:,2] = rim 
     
     return (slices, np.array(bb)) 
 
