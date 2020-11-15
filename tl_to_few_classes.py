@@ -18,7 +18,7 @@ def train_vgg_tl_across_classes():
 
   print('getting', config.frac_data, 'fraction of data')
   
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(load = True)
+  X_train_big, Y_train, X_val, Y_val, X_test, Y_test = pre_process(load = True)
 
   # print('Y_test', Y_test)
   # print('Y_val', Y_val)
@@ -34,9 +34,11 @@ def train_vgg_tl_across_classes():
   select_classes_test = all_classes[:config.frac_classes]
   
   #Sample from X and Y for a certain fraction of Test/Train data for a certain set of classes
-  k = int(len(X_train)/NUM_CLASSES)  
-  X_train, Y_train = sample_from(X_train, Y_train, k, all_classes, frac_data = config.frac_data) 
+  k = int(len(X_train_big)/NUM_CLASSES)  
+  X_train, Y_train = sample_from(X_train_big, Y_train, k, all_classes, frac_data = config.frac_data) 
         
+  del X_train_big
+  
   k = int(len(X_val)/NUM_CLASSES)
   X_val, Y_val = sample_from(X_val, Y_val, k, select_classes_test, frac_data = config.frac_data) 
 

@@ -1,0 +1,27 @@
+program: pre_process.py
+method: bayes
+metric:
+  name: categorical_accuracy
+  goal: maximize
+parameters:
+  log_lr:
+    min: -5.1
+    max: 0.1  
+  log_meta_lr:
+    min: -5.1
+    max: 0.1
+  epochs:
+    min: 1
+    max: 15
+  log_LSTM_HIDDEN_UNITS:
+    min: 3
+    max: 10 
+  n_mt_samples:
+    min: 100
+    max: 300
+  k_shot:
+    min: 3
+    max: 5
+  n_mt_classes:
+    min: 3
+    max: 5

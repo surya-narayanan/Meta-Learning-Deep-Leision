@@ -174,8 +174,8 @@ def sample_from(x, y, k, classes, frac_data = 1):
   
   D = x.shape[1]
 
-  X = np.empty((0, D, D, 3), numpy.float32)
-  Y = np.empty((0, NUM_CLASSES), numpy.float32)
+  X = np.empty((0, D, D, 3), np.float32)
+  Y = np.empty((0, NUM_CLASSES), np.float32)
 
   labels = np.eye(NUM_CLASSES)
   counter = 0
