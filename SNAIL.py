@@ -1,5 +1,6 @@
 from pre_process import *
-  
+import tensorflow as tf
+
 def train_vgg_snail():
   
   hyperparameter_defaults = dict(
@@ -7,7 +8,7 @@ def train_vgg_snail():
     log_meta_lr = -3,
     epochs = 10,
     log_LSTM_HIDDEN_UNITS = 7,
-    n_mt_samples = 100,
+    n_mt_samples = 25,
     k_shot = 3,
     n_mt_classes = 3
     )
@@ -18,16 +19,14 @@ def train_vgg_snail():
 
   print('train_vgg_snail')
 
-  fs = [i for i in [0.1055, .1754, .1205, .1924, .2017, .1522, .2575, .3307]]
-
-  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(fs = fs, load = True, save = False, downsample = True)
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = pre_process(load = True, save = False, downsample = True)
 
   X_train, Y_train, X_val, Y_val, X_test, Y_test = [np.float32(a) for a in [X_train, Y_train, X_val, Y_val, X_test, Y_test]]  
 
   print(Y_test)
 
-  input_shape = (256, 256, 3)
-  num_classes = 9
+  input_shape = (512, 512, 3)
+  num_classes = NUM_CLASSES 
 
   initializer = tf.initializers.VarianceScaling(scale=2.0)
 
@@ -53,9 +52,9 @@ def train_vgg_snail():
   #meta train
   n_mt_classes = config.n_mt_classes
   k_shot = config.k_shot
-  n_mt_samples = 1 #config.n_mt_samples
+  n_mt_samples = config.n_mt_samples
   
-  classes = list(range(n_classes))
+  classes = list(range(NUM_CLASSES))
   np.random.shuffle(classes)
   shuffled_classes = classes[:n_mt_classes] #indexing to select n classes for meta training
 
@@ -65,8 +64,8 @@ def train_vgg_snail():
 
   print(x_mt.shape)
 
-  x_mt = x_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, 256, 256, 3))
-  y_mt = y_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, n_mt_classes))
+  x_mt = x_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, 512, 512, 3))
+  y_mt = y_mt.reshape(((k_shot + 1) * n_mt_classes, n_mt_samples, NUM_CLASSES))
 
   y_mt = np.transpose(y_mt, (1, 0, 2))
   x_mt = np.transpose(x_mt, (1, 0, 2, 3, 4))
@@ -75,8 +74,9 @@ def train_vgg_snail():
   # print('expected')
   # print((n_mt_samples, (k_shot + 1) * n_mt_classes, 256, 256, 3))
 
-  embeddings = model.predict(x_mt.reshape((-1, 256, 256, 3)))  
+  embeddings = model.predict(x_mt.reshape((-1, 512, 512, 3)))  
 
+  print('got embeddings')
   embeddings = embeddings.reshape((n_mt_samples, n_mt_classes, (k_shot + 1), -1))
   
   y_mt = y_mt.reshape((n_mt_samples, n_mt_classes, (k_shot + 1), -1))
@@ -85,7 +85,7 @@ def train_vgg_snail():
   x_mt_support = x_mt_support.reshape(((n_mt_samples, k_shot * n_mt_classes, -1))) #(n_mt_samples, k_shot * n_mt_classes, embedding + n_mt_classes)
   x_mt_support = np.repeat(x_mt_support, n_mt_classes, axis = 0)
 
-  x_mt_query = np.concatenate([embeddings[:,:,-1,:], np.zeros((n_mt_samples, n_mt_classes, n_mt_classes))], axis = 2) #(n_mt_samples, n_mt_classes, embedding + n_mt_classes)
+  x_mt_query = np.concatenate([embeddings[:,:,-1,:], np.zeros((n_mt_samples, n_mt_classes, NUM_CLASSES))], axis = 2) #(n_mt_samples, n_mt_classes, embedding + n_mt_classes)
   x_mt_query = x_mt_query.reshape(n_mt_samples * n_mt_classes, 1, -1) #(n_mt_samples * n_mt_classes, 1, embedding + n_mt_classes)
 
   x_mt = np.concatenate((x_mt_support, x_mt_query), axis = 1)
@@ -104,7 +104,7 @@ def train_vgg_snail():
   
   layers = [
     tf.keras.layers.LSTM(2**config.log_LSTM_HIDDEN_UNITS, input_shape = (K,D), return_sequences=True),
-    tf.keras.layers.LSTM(n_mt_classes)
+    tf.keras.layers.LSTM(NUM_CLASSES)
     # tf.keras.layers.Softmax()
   ]
 
@@ -120,7 +120,7 @@ def train_vgg_snail():
   
   history = meta_model.fit(x_mt, y_mt_query, epochs = config.epochs)
 
-  metrics = {'categorical_accuracy': history.history['categorical_accuracy'][-1] - 1/n_mt_classes}
+  metrics = {'categorical_accuracy': history.history['categorical_accuracy'][-1]}
   wandb.log(metrics)
 
   preds = meta_model.predict(x_mt)
@@ -164,8 +164,6 @@ def train_vgg_snail():
   # print(Y_test, preds)
 
 if __name__ == '__main__':
-  # train_vgg()
-  # pre_process(f = .05)
-  # train_vgg_snail()
+  train_vgg_snail()
   pass
   
