@@ -68,7 +68,7 @@ def train_vgg():
   # print(model.summary())
 
   #Make model not trainable
-  model.trainable = False
+  model.trainable = True
 
   model.layers.pop()
   model.outputs = [model.layers[-1].output]

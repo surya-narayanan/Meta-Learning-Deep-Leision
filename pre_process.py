@@ -151,6 +151,7 @@ def pre_process(fs = [0.01 for _ in range(1, 9)], downsample = True, save = True
   
   # print('size of sample image', sys.getsizeof(x))
     
+  X_train, Y_train, X_val, Y_val, X_test, Y_test = [np.float32(a) for a in [X_train, Y_train, X_val, Y_val, X_test, Y_test]]  
   
   if save:
     pickle.dump( X_train, open( "X_train.p", "wb" ) , protocol=4)
