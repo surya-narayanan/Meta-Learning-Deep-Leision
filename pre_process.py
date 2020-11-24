@@ -209,7 +209,12 @@ def sample_from(x, y, k, classes, frac_data = 1):
 
     # print('labels[counter]', labels[counter])
 
+    """
+    pickle.dump(X, open( "X_" + str(class_num).p", "wb" ) , protocol=4)
+    """
+
   print('sampled data , sample sizes are ', X.shape, Y.shape )
+
 
   return X, Y
 
